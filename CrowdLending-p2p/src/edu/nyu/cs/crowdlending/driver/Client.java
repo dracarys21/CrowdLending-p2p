@@ -14,6 +14,7 @@ import java.util.Scanner;
 public class Client {
 	private String accountNumber;
     private String ip;
+    
     private int balance;
     private Map<String, Integer> moneyBorrowed;
     private Map<String,Integer> moneyLent;
@@ -23,13 +24,18 @@ public class Client {
     
     ServerSocket serviceSocket;
     
-    public Client(String accNo, String ipAddress, int port, int bal, InetAddress serverIp, int serverPort) throws IOException {
+    public Client(String accNo, String ipAddress, int port, int bal, String serverIp, int serverPort) throws IOException {
+    	
     	this.port = port; 
     	serviceSocket = new ServerSocket(port);
-    	this.serverPort = serverPort; 
+       	balance = bal;
+    	
     	this.accountNumber = accNo;
     	ip = ipAddress;
-    	balance = bal;
+    	
+    	this.serverIp = serverIp;
+    	this.serverPort = serverPort; 
+    	
     	moneyBorrowed = Collections.synchronizedMap(new HashMap<>());
     	moneyLent = Collections.synchronizedMap(new HashMap<>());
     }
@@ -44,13 +50,20 @@ public class Client {
     
     //register client to server
     public void register() throws UnknownHostException, IOException {
+    	
     	Socket sc = new Socket(serverIp, serverPort);
+    	
     	PrintWriter out = new PrintWriter(sc.getOutputStream(), true);
         Scanner in = new Scanner(sc.getInputStream());
         
         String registerServ = ip+":"+port;
         //send client's wish to get money
         out.println("REGISTER "+registerServ);
+        System.out.println(in.nextLine());
+        
+        sc.close();
+        out.close();
+        in.close();
     }
     
   //ask server for lenders	
@@ -67,11 +80,12 @@ public class Client {
     }
     
     //acting as a client
-    public void borrowMoney(String[] ipsToConnect, int moneyReq) throws IOException {
+    public void requestMoney(String[] ipsToConnect, int moneyReq) throws IOException {
     	//connect to server to get list of lenders
-    	Socket sc = new Socket(serverIp, serverPort);
+    	Socket sc = null;
     	Scanner in = null ;
     	PrintWriter out = null;
+    	String ownIpPort = ip+":"+port;
     	
         for(String ipsAndPort : ipsToConnect) {
         	 //get port
@@ -81,11 +95,12 @@ public class Client {
         	out = new PrintWriter(sc.getOutputStream(), true);
         	in = new Scanner(sc.getInputStream());
         	 
-        	 out.println("BORROW "+moneyReq);
+        	 out.println("REQUEST "+ownIpPort+" "+moneyReq);
         	 String response = in.nextLine(); 
 
         	 if(response.equals("AWK AVAILABLE")) {
         		 balance+=moneyReq;
+        		 moneyBorrowed.put(ipsAndPort, moneyReq);
         		 System.out.println("Money Recieved");
         		 break;
         	 }
@@ -101,7 +116,6 @@ public class Client {
     	//accepts the connection from borrower peer
     	Socket client = serviceSocket.accept();
     	
-    	//<----Might have to edit---->
     	//read the input from client 
     	Scanner input = new Scanner(client.getInputStream());
     	PrintWriter output = new PrintWriter(client.getOutputStream(), true);
@@ -114,12 +128,14 @@ public class Client {
     	
     	if(reqMoney<balance) {
     		output.println("AWK AVAILABLE");
+    		moneyLent.put(parsed[2], reqMoney);
     		balance = balance-reqMoney;
     	}
     	else {
     	 //send message if money not available to send
     		output.println("AWK NOT AVAILABLE");
-    		
+    	
+    	//close connections	
     		input.close();
             output.close();
             client.close();
@@ -139,6 +155,7 @@ public class Client {
         client.close();
     }
     
+    //acts as a client
     public void updateServer() throws UnknownHostException, IOException {
     	Socket sc = new Socket(serverIp, serverPort);
     	PrintWriter out = new PrintWriter(sc.getOutputStream(), true);
@@ -146,7 +163,37 @@ public class Client {
         
         String registerServ = ip+":"+port;
         //send client's wish to get money
-        out.println("UPDATE "+balance);
+        out.println("UPDATE "+registerServ+" "+balance);
+        System.out.println(in.nextLine());
+    }
+    
+    //acts as a client 
+    public void returnMoney(String ipWithPort) throws IOException {
+    	Socket sc = new Socket(serverIp, serverPort);
+    	PrintWriter out = new PrintWriter(sc.getOutputStream(), true);
+        Scanner in = new Scanner(sc.getInputStream());
+        
+        int moneyRet = moneyBorrowed.get(ipWithPort);
+         moneyBorrowed.remove(ipWithPort);
+         
+        balance = balance-moneyRet;
+        out.println("RETURN "+ipWithPort+" "+moneyRet);
+        
+        System.out.println(in.nextLine());
+    }
+    
+    //acts as a server
+    public void receieveBorrowedMoney() throws IOException {
+    	Socket client = serviceSocket.accept();
+    	Scanner input = new Scanner(client.getInputStream());
+    	PrintWriter output = new PrintWriter(client.getOutputStream(), true);
+    	
+    	String msg = input.nextLine();
+    	
+    	String[] splits = msg.split(" ");
+    	int moneyReturned = Integer.parseInt(splits[2]);
+    	moneyLent.put(splits[1],moneyLent.get(splits[1])-moneyReturned);
+    	balance = balance - moneyReturned;	
     }
     
 }
