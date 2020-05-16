@@ -38,10 +38,10 @@ public class Server {
 		int amountRequested = Integer.parseInt(amountString);
 		List<String> eligibleLenders = new ArrayList<>();
 		for(Entry<String, Integer> e: directory.entrySet()) {
-			String ip = e.getKey();
+			String ipAndPort = e.getKey();
 			int balance = e.getValue();
 			if(balance >= amountRequested) {
-				eligibleLenders.add(ip);
+				eligibleLenders.add(ipAndPort);
 			}
 		}
 		return String.join(",", eligibleLenders);
@@ -49,16 +49,16 @@ public class Server {
 	
 	private static void registerNewPeer(String input) {
 		String[] arr = splitInputString(input);
-		String ip = arr[1];
-		int balance = Integer.parseInt(arr[3]);
-		directory.put(ip, balance);
+		String ipAndPort = arr[1];
+		int balance = Integer.parseInt(arr[2]);
+		directory.put(ipAndPort, balance);
 	}
 	
 	private static void updateBalance(String input) {
 		String[] arr = splitInputString(input);
-		String ip = arr[1];
+		String ipAndPort = arr[1];
 		int updatedBalance = Integer.parseInt(arr[2]);
-		directory.put(ip, updatedBalance);
+		directory.put(ipAndPort, updatedBalance);
 	}
 
     private static class Lender implements Runnable {
