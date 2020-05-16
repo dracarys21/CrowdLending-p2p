@@ -32,7 +32,7 @@ public class Server {
 		return arr;
 	}
 	
-	private static String queryDirectory(String input) {
+	private static void queryDirectory(String input, PrintWriter out) {
 		String[] arr = splitInputString(input);
 		String amountString = arr[2];
 		int amountRequested = Integer.parseInt(amountString);
@@ -44,21 +44,23 @@ public class Server {
 				eligibleLenders.add(ipAndPort);
 			}
 		}
-		return String.join(",", eligibleLenders);
+		out.println(String.join(",", eligibleLenders));
 	}
 	
-	private static void registerNewPeer(String input) {
+	private static void registerNewPeer(String input, PrintWriter out) {
 		String[] arr = splitInputString(input);
 		String ipAndPort = arr[1];
 		int balance = Integer.parseInt(arr[2]);
 		directory.put(ipAndPort, balance);
+		out.println("AWK REGISTERD " + ipAndPort);
 	}
 	
-	private static void updateBalance(String input) {
+	private static void updateBalance(String input, PrintWriter out) {
 		String[] arr = splitInputString(input);
 		String ipAndPort = arr[1];
 		int updatedBalance = Integer.parseInt(arr[2]);
 		directory.put(ipAndPort, updatedBalance);
+		out.println("AWK UPDATED " + ipAndPort + " " + updatedBalance);
 	}
 
     private static class Lender implements Runnable {
@@ -78,14 +80,13 @@ public class Server {
                 String line = in.nextLine();
                 //1. Parse input
                 if(line.contains("REGISTER")) {
-                	Server.registerNewPeer(line);
+                	Server.registerNewPeer(line, out);
                 }
                 else if(line.contains("BORROW")) {
-                	String eligibleLenders = Server.queryDirectory(line);
-                	out.println(eligibleLenders);
+                	Server.queryDirectory(line, out);
                 }
                 else if(line.contains("UPDATE")) {
-                	Server.updateBalance(line);
+                	Server.updateBalance(line, out);
                 }
                 in.close();
             }
