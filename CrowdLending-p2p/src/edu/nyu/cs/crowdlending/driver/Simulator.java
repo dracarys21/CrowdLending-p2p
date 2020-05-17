@@ -30,6 +30,7 @@ public class Simulator {
 			 * 2)return money
 			 * 3)close me!!
 			 */
+			System.out.println("Enter 1 to borrow, 2 to return");
 			int option = sc.nextInt();
 			if(option==1) {
 				System.out.println("Enter amount to borrow: ");
@@ -38,9 +39,9 @@ public class Simulator {
 				client.requestMoney(ipsToConnect, moneyRequested);
 			}
 			else if(option==2) {
-				System.out.println("Enter port Number of client to return");
+				System.out.println("Enter port of client to return");
 				int port =  sc.nextInt();
-				client.returnMoney("localhost:"+port);
+				client.returnMoney("127.0.0.1", port);
 			}
 			else 
 				break;

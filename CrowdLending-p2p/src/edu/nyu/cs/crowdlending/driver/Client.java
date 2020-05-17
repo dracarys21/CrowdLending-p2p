@@ -25,11 +25,9 @@ public class Client {
     //ServerSocket serviceSocket;
     
     public Client(String accNo, int bal, String serverIp, int port) throws IOException {
-    	//this.port = port; 
-    	//serviceSocket = new ServerSocket(port);
        	balance = bal;
     	this.accountNumber = accNo;
-    	//ip = ipAddress;
+    	ip = "127.0.0.1";
     	this.serverIp = "127.0.0.1";
     	serverPort = 59898;
     	this.port = port; 
@@ -37,12 +35,16 @@ public class Client {
     	moneyLent = Collections.synchronizedMap(new HashMap<>());
     	new Thread(new Runnable() {
 		   public void run() {
-		       try {
-				startClientServer(port);
-			} catch (Exception e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
+			   try (var listener = new ServerSocket(port)) {
+				   System.out.println("The peer is listening for borrow requests...");
+		            var pool = Executors.newFixedThreadPool(20);
+		            while (true) {
+		                pool.execute(new ClientServer(listener.accept()));
+		            }
+		        } catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
 		   }
 		}).start();
     }
@@ -60,24 +62,23 @@ public class Client {
     	Socket sc = new Socket(serverIp, serverPort);
     	PrintWriter out = new PrintWriter(sc.getOutputStream(), true);
         Scanner in = new Scanner(sc.getInputStream());
-        String registerServ = ip+":"+port;
+        String registerServ = ip + ":"+port + " " + balance;
         //send client's wish to get money
         out.println("REGISTER "+registerServ);
         System.out.println(in.nextLine());
-        sc.close();
-        out.close();
         in.close();
+        sc.close();
     }
     
-  //ask server for lenders	
+    //ask server for lenders	
     public String[] getEligibleLendersFromServer(int moneyReq) throws IOException {
     	Socket sc = new Socket(serverIp, serverPort);
     	PrintWriter out = new PrintWriter(sc.getOutputStream(), true);
         Scanner in = new Scanner(sc.getInputStream());
-        out.println("BORROW "+moneyReq);
+        out.println("BORROW " + ip + ":" + port + " " + moneyReq);
         String[] ipsToConnect = in.nextLine().split(",");
-        sc.close();
         in.close();
+        sc.close();
         return ipsToConnect;
     }
     
@@ -101,24 +102,29 @@ public class Client {
         	 String response = in.nextLine(); 
 
         	 if(response.equals("AWK AVAILABLE")) {
-        		 balance+=moneyReq;
-        		 moneyBorrowed.put(ipsAndPort, moneyReq);
-        		 System.out.println("MONEY RECEIVED BY "+accountNumber);
+        		 balance += moneyReq;
+        		 if(moneyBorrowed.containsKey(ipsAndPort)) {
+        			 moneyBorrowed.put(ipsAndPort, moneyBorrowed.get(ipsAndPort) + moneyReq);
+        		 }
+        		 else {
+        			 moneyBorrowed.put(ipsAndPort, moneyReq);
+        		 }
+        		 System.out.println("MONEY RECEIVED FROM " + ipsAndPort);
+        		 System.out.println("Current balance: " + balance);
+        		 updateServer();
         		 break;
         	 }
         }        
-      //close connections
-        if(in!=null) in.close();
-        if(out!=null) out.close();
-        sc.close();
     }
     
     //acting as a Server
     public  synchronized Runnable lendMoney(String clientIPAndPort, int reqMoney, Scanner input, PrintWriter output) throws UnknownHostException, IOException {
     	if(reqMoney<=balance) {
     		output.println("AWK AVAILABLE");
-    		balance = balance-reqMoney;
+    		balance = balance - reqMoney;
     		moneyLent.put(clientIPAndPort, reqMoney);
+    		System.out.println("Money lent to " + clientIPAndPort);
+    		System.out.println("Current balance is " + balance);
     		//update server
             updateServer();
     	}
@@ -126,9 +132,6 @@ public class Client {
     	 //send message if money not available to send
     		output.println("AWK NOT AVAILABLE");
     	}
-        //close connections
-        input.close();
-        output.close();
 		return null;
     }
     
@@ -137,55 +140,65 @@ public class Client {
     	Socket sc = new Socket(serverIp, serverPort);
     	PrintWriter out = new PrintWriter(sc.getOutputStream(), true);
         Scanner in = new Scanner(sc.getInputStream());
-        String registerServ = ip+":"+port;
-        //send client's wish to get money
-        out.println("UPDATE "+registerServ+" "+balance);
+        String registerServ = ip + ":" + port;
+        out.println("UPDATE " + registerServ + " " + balance);
         System.out.println(in.nextLine());
-        sc.close();
         in.close();
+        sc.close();
     }
     
     //acts as a client 
-    public synchronized void returnMoney(String ipWithPort) throws IOException {
-    	Socket sc = new Socket(serverIp, serverPort);
+    public synchronized void returnMoney(String ip, int port) throws IOException {
+    	Socket sc = new Socket(ip, port);
     	PrintWriter out = new PrintWriter(sc.getOutputStream(), true);
         Scanner in = new Scanner(sc.getInputStream());
+        String ipWithPort = ip + ":" + port;
         int moneyRet = moneyBorrowed.get(ipWithPort);
-         moneyBorrowed.remove(ipWithPort);
-        balance = balance-moneyRet;
-        out.println("RETURN "+ipWithPort+" "+moneyRet);
-        System.out.println(in.nextLine());
-        sc.close();
-        in.close();
+        moneyBorrowed.remove(ipWithPort);
+        balance = balance - moneyRet;
+        out.println("RETURN " + this.ip + ":" + this.port + " " + moneyRet);
+        System.out.println("Returned " + moneyRet + " to " + ipWithPort);
     }
     
     //acts as a server
-    public synchronized Runnable receieveBorrowedMoney(String clientIPAndPort, int moneyReturned, PrintWriter output) {
+    public synchronized Runnable receiveReturnedMoney(String clientIPAndPort, int moneyReturned, PrintWriter output) throws UnknownHostException, IOException {
     	moneyLent.put(clientIPAndPort, moneyLent.get(clientIPAndPort) - moneyReturned);
     	balance = balance + moneyReturned;
-    	output.println("MONEY RECEIVED FROM " + accountNumber);
+    	output.println("MONEY RECEIVED FROM " + clientIPAndPort);
+    	System.out.println("Current balance is: " + balance);
+    	updateServer();
 		return null;
     }
     
-    public void startClientServer(int port) throws Exception {
-        try (var listener = new ServerSocket(port)) {	//args[0] = port of peer when it acts as a server
-            System.out.println("The peer is listening for borrow requests...");
-            var pool = Executors.newFixedThreadPool(10);
-            while (true) {
-            	Socket socket = listener.accept();
-            	var in = new Scanner(socket.getInputStream());
-                var out = new PrintWriter(socket.getOutputStream(), true);
-                String line = in.nextLine();
-                String[] arr = line.split(" ");
-                String ipAndPort = arr[1];
-            	int amount = Integer.parseInt(arr[2]);
-                if(arr[0].equals("REQUEST")) {
-                	pool.execute(lendMoney(ipAndPort, amount, in, out));
-                }
-                else if(arr[0].equals("RETURN")) {
-                	pool.execute(receieveBorrowedMoney(ipAndPort, amount, out));
-                }
-            }
+    private class ClientServer implements Runnable{
+    	private Socket socket;
+    	ClientServer(Socket socket) {
+            this.socket = socket;
         }
+        
+		@Override
+		public void run() {
+			System.out.println("Connected: " + socket);
+			try {
+	            while (true) {
+	            	var in = new Scanner(socket.getInputStream());
+	                var out = new PrintWriter(socket.getOutputStream(), true);
+	                String line = in.nextLine();
+	                String[] arr = line.split(" ");
+	                String ipAndPort = arr[1];
+	            	int amount = Integer.parseInt(arr[2]);
+	                if(arr[0].equals("REQUEST")) {
+	                	lendMoney(ipAndPort, amount, in, out);
+	                }
+	                else if(arr[0].equals("RETURN")) {
+	                	receiveReturnedMoney(ipAndPort, amount, out);
+	                }
+	            }
+	        } catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+    	
     }
 }
