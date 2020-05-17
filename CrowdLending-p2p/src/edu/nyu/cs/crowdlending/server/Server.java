@@ -17,14 +17,17 @@ public class Server {
 	
 	private static Map<String, Integer> directory = Collections.synchronizedMap(new HashMap<>());
 	
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) {
         try (var listener = new ServerSocket(59898)) {
             System.out.println("The banking server is running...");
             var pool = Executors.newFixedThreadPool(20);
             while (true) {
                 pool.execute(new Lender(listener.accept()));
             }
-        }
+        } catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
     }
 	
 	private static String[] splitInputString(String input) {
