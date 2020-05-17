@@ -99,15 +99,6 @@ public class Server {
             catch (Exception e) {
                 System.out.println("Error:" + socket);
             }
-//            finally {
-//                try {
-//                    socket.close();
-//                    System.out.println("Closed: " + socket);
-//                }
-//                catch (IOException e) {
-//                	System.out.println(e.getStackTrace());
-//                }
-//            }
         }
     }
 }
