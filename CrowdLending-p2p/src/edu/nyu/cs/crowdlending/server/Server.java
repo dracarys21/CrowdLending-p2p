@@ -9,7 +9,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Scanner;
 import java.util.concurrent.Executors;
 
@@ -36,17 +35,21 @@ public class Server {
 	}
 	
 	private static void queryDirectory(String input, PrintWriter out) {
+		System.out.println("String is " + input);
 		String[] arr = splitInputString(input);
+		String borrower = arr[1];
 		String amountString = arr[2];
 		int amountRequested = Integer.parseInt(amountString);
+		System.out.println("Directory is " + directory);
 		List<String> eligibleLenders = new ArrayList<>();
-		for(Entry<String, Integer> e: directory.entrySet()) {
+		for(Map.Entry<String, Integer> e: directory.entrySet()) {
 			String ipAndPort = e.getKey();
 			int balance = e.getValue();
-			if(balance >= amountRequested) {
+			if(balance >= amountRequested && !ipAndPort.equals(borrower)) {
 				eligibleLenders.add(ipAndPort);
 			}
 		}
+		System.out.println("Here are the eligible lenders: " + String.join(",", eligibleLenders));
 		out.println(String.join(",", eligibleLenders));
 	}
 	
@@ -55,7 +58,7 @@ public class Server {
 		String ipAndPort = arr[1];
 		int balance = Integer.parseInt(arr[2]);
 		directory.put(ipAndPort, balance);
-		out.println("AWK REGISTERD " + ipAndPort);
+		out.println("AWK REGISTERED " + ipAndPort);
 	}
 	
 	private static void updateBalance(String input, PrintWriter out) {
@@ -95,15 +98,6 @@ public class Server {
             }
             catch (Exception e) {
                 System.out.println("Error:" + socket);
-            }
-            finally {
-                try {
-                    socket.close();
-                }
-                catch (IOException e) {
-                	
-                }
-                System.out.println("Closed: " + socket);
             }
         }
     }
