@@ -66,10 +66,10 @@ public class Simulator {
 				client.withdrawMoney(money);
 			}
 			else {
-				client.leaveNetwork();
+			boolean decision =	client.leaveNetwork();
+			if(decision)
 				break;
 			}
-		
 		}
 		sc.close();
 	}

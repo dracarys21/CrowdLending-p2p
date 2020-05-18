@@ -22,8 +22,10 @@ public class Client {
     String serverIp;
     int serverPort;
     int port;
+    boolean isActive;
     
     public Client(String accNo, int bal, String serverIp, int port) throws IOException {
+    	isActive = true;
        	balance = bal;
     	this.accountNumber = accNo;
     	ip = "127.0.0.1";
@@ -32,6 +34,7 @@ public class Client {
     	this.port = port; 
     	moneyBorrowed = Collections.synchronizedMap(new HashMap<>());
     	moneyLent = Collections.synchronizedMap(new HashMap<>());
+    	
     	
     	new Thread(new Runnable() {
 		   public void run() {
@@ -96,7 +99,11 @@ public class Client {
     }
     
     //acts as a client
-    public void leaveNetwork() throws UnknownHostException, IOException {
+    public boolean leaveNetwork() throws UnknownHostException, IOException {
+    	if(!moneyBorrowed.isEmpty()) {
+    		System.out.println("You owe money!!! Please pay your outstanding before leaving....");
+    		return false; 
+    	}
     	Socket sc = new Socket(serverIp, serverPort);
     	PrintWriter out = new PrintWriter(sc.getOutputStream(), true);
         Scanner in = new Scanner(sc.getInputStream());
@@ -104,7 +111,9 @@ public class Client {
         System.out.println(in.nextLine());
         in.close();
         sc.close();
-    }
+        isActive = false;
+        return true;
+       }
     //ask server for lenders	
     public String[] getEligibleLendersFromServer(int moneyReq) throws IOException {
     	Socket sc = new Socket(serverIp, serverPort);
@@ -162,6 +171,7 @@ public class Client {
     //acting as a Server
     public  synchronized Runnable lendMoney(String clientIPAndPort, int reqMoney, Scanner input, PrintWriter output) throws UnknownHostException, IOException {
     	if(reqMoney<=balance) {
+    		//	System.out.println("MONEY AVAILABLE");
     			output.println("AWK AVAILABLE");
     			balance = balance - reqMoney;
     			moneyLent.put(clientIPAndPort, reqMoney);
@@ -200,20 +210,24 @@ public class Client {
         Scanner in = new Scanner(sc.getInputStream());
         String ipWithPort = ip + ":" + port;
         if(moneyBorrowed.containsKey(ipWithPort)) {
-        	if(balance>amount && moneyBorrowed.get(ipWithPort)>=amount) {
-        		int moneyRet = moneyBorrowed.get(ipWithPort);
-        		moneyRet-=amount;
-        		if(moneyRet>0)
-        			moneyBorrowed.put(ipWithPort, moneyRet);
-        		else	
-        			moneyBorrowed.remove(ipWithPort);
-        		balance = balance - moneyRet;
-        		updateServer();
-        		out.println("RETURN " + this.ip + ":" + this.port + " " + moneyRet);
-        		System.out.println("Returned " + moneyRet + " to " + ipWithPort);
+        	if(balance>=amount ) {
+        		if(moneyBorrowed.get(ipWithPort)>=amount) {
+	        		int moneyRet = moneyBorrowed.get(ipWithPort);
+	        		moneyRet-=amount;
+	        		if(moneyRet>0)
+	        			moneyBorrowed.put(ipWithPort, moneyRet);
+	        		else	
+	        			moneyBorrowed.remove(ipWithPort);
+	        		balance = balance - amount;
+	        		updateServer();
+	        		out.println("RETURN " + this.ip + ":" + this.port + " " + amount);
+	        		System.out.println("Returned " + amount + " to " + ipWithPort);
+        		}
+        		else
+        			System.out.println("INVALID AMOUNT ENTERED");
         	}
         	else
-        		System.out.println("INCORRECT VALUE ENTERED");
+        		System.out.println("AMOUNT ENTERED GREATER THAN BALANCE");
         }
         else
         	System.out.println("No money borrowed from "+ipWithPort);
@@ -243,7 +257,7 @@ public class Client {
 		public void run() {
 			System.out.println("Connected: " + socket);
 			try {
-	            while (true) {
+		            while (true) {
 	            	var in = new Scanner(socket.getInputStream());
 	                var out = new PrintWriter(socket.getOutputStream(), true);
 	                String line = in.nextLine();
@@ -256,7 +270,10 @@ public class Client {
 	                else if(arr[0].equals("RETURN")) {
 	                	receiveReturnedMoney(ipAndPort, amount, out);
 	                }
+		        //   in.close();
+	              //  out.close();
 	            }
+	           // socket.close();
 	        } catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
