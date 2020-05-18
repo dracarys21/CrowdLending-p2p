@@ -2,6 +2,7 @@ package edu.nyu.cs.crowdlending.driver;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -22,8 +23,6 @@ public class Client {
     int serverPort;
     int port;
     
-    //ServerSocket serviceSocket;
-    
     public Client(String accNo, int bal, String serverIp, int port) throws IOException {
        	balance = bal;
     	this.accountNumber = accNo;
@@ -33,6 +32,7 @@ public class Client {
     	this.port = port; 
     	moneyBorrowed = Collections.synchronizedMap(new HashMap<>());
     	moneyLent = Collections.synchronizedMap(new HashMap<>());
+    	
     	new Thread(new Runnable() {
 		   public void run() {
 			   try (var listener = new ServerSocket(port)) {
@@ -41,7 +41,12 @@ public class Client {
 		            while (true) {
 		                pool.execute(new ClientServer(listener.accept()));
 		            }
-		        } catch (IOException e) {
+		        } 
+			   catch(BindException ex) {
+			   		System.out.println("Exiting portal...port already exists");
+			   		System.exit(0);
+			   	}
+			   catch (IOException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
@@ -57,6 +62,14 @@ public class Client {
     	return ip;
     }
     
+    public Map<String, Integer> getMoneyBorrowedList() {
+    	return moneyBorrowed;
+    }
+    
+    public String getMoneyLent(String ipWithPort) {
+    	return ipWithPort+" "+moneyLent.get(ipWithPort);
+    }
+    
     //register client to server
     public void register() throws UnknownHostException, IOException {
     	Socket sc = new Socket(serverIp, serverPort);
@@ -65,11 +78,33 @@ public class Client {
         String registerServ = ip + ":"+port + " " + balance;
         //send client's wish to get money
         out.println("REGISTER "+registerServ);
-        System.out.println(in.nextLine());
+        System.out.println();
         in.close();
         sc.close();
     }
     
+    //acts as a client
+    public void depositMoney(int money) throws UnknownHostException, IOException {
+    	balance+=money;
+    	updateServer();
+    }
+   
+    //acts as a client
+    public void withdrawMoney(int money) throws UnknownHostException, IOException {
+    	balance-=money;
+    	updateServer();
+    }
+    
+    //acts as a client
+    public void leaveNetwork() throws UnknownHostException, IOException {
+    	Socket sc = new Socket(serverIp, serverPort);
+    	PrintWriter out = new PrintWriter(sc.getOutputStream(), true);
+        Scanner in = new Scanner(sc.getInputStream());
+        out.println("LEAVE " + ip + ":" + port);
+        System.out.println(in.nextLine());
+        in.close();
+        sc.close();
+    }
     //ask server for lenders	
     public String[] getEligibleLendersFromServer(int moneyReq) throws IOException {
     	Socket sc = new Socket(serverIp, serverPort);
@@ -89,30 +124,37 @@ public class Client {
     	Scanner in = null ;
     	PrintWriter out = null;
     	String ownIpPort = ip+":"+port;
-    	
+    	boolean borrowed = false;
         for(String ipsAndPort : ipsToConnect) {
         	 //get port
-        	String ipAndPort[] = ipsAndPort.split(":");
+        	if(borrowed)
+        		break;
+        	if(!ipsAndPort.contains(":")) {
+        		System.out.println("No Lenders Available");
+        		continue;
+        	}
         	
-        	 sc = new Socket(ipAndPort[0], Integer.parseInt(ipAndPort[1]));	
+        	String ipAndPort[] = ipsAndPort.split(":");
+        	sc = new Socket(ipAndPort[0], Integer.parseInt(ipAndPort[1]));	
         	out = new PrintWriter(sc.getOutputStream(), true);
         	in = new Scanner(sc.getInputStream());
         	 
         	 out.println("REQUEST "+ownIpPort+" "+moneyReq);
-        	 String response = in.nextLine(); 
-
-        	 if(response.equals("AWK AVAILABLE")) {
-        		 balance += moneyReq;
-        		 if(moneyBorrowed.containsKey(ipsAndPort)) {
-        			 moneyBorrowed.put(ipsAndPort, moneyBorrowed.get(ipsAndPort) + moneyReq);
-        		 }
-        		 else {
-        			 moneyBorrowed.put(ipsAndPort, moneyReq);
-        		 }
-        		 System.out.println("MONEY RECEIVED FROM " + ipsAndPort);
-        		 System.out.println("Current balance: " + balance);
-        		 updateServer();
-        		 break;
+        	 String response = in.nextLine();
+        	 if(response.contains("AWK AVAILABLE")) {
+        		 	 borrowed = true;
+	        		 balance += moneyReq;
+	        		 System.out.println(ipsAndPort);
+	        		 if(moneyBorrowed.containsKey(ipsAndPort)) {
+	        			 moneyBorrowed.put(ipsAndPort, moneyBorrowed.get(ipsAndPort) + moneyReq);
+	        		 }
+	        		 else {
+	        			 moneyBorrowed.put(ipsAndPort, moneyReq);
+	        		 }
+	        		 System.out.println("MONEY RECEIVED FROM " + ipsAndPort);
+	        		 System.out.println("Current balance: " + balance);
+	        		 updateServer();
+	        		 break;
         	 }
         }        
     }
@@ -120,13 +162,13 @@ public class Client {
     //acting as a Server
     public  synchronized Runnable lendMoney(String clientIPAndPort, int reqMoney, Scanner input, PrintWriter output) throws UnknownHostException, IOException {
     	if(reqMoney<=balance) {
-    		output.println("AWK AVAILABLE");
-    		balance = balance - reqMoney;
-    		moneyLent.put(clientIPAndPort, reqMoney);
-    		System.out.println("Money lent to " + clientIPAndPort);
-    		System.out.println("Current balance is " + balance);
-    		//update server
-            updateServer();
+    			output.println("AWK AVAILABLE");
+    			balance = balance - reqMoney;
+    			moneyLent.put(clientIPAndPort, reqMoney);
+    			System.out.println("Money lent to " + clientIPAndPort);
+    			System.out.println("Current balance is " + balance);
+    			//update server
+    			updateServer();
     	}
     	else {
     	 //send message if money not available to send
@@ -148,25 +190,46 @@ public class Client {
     }
     
     //acts as a client 
-    public synchronized void returnMoney(String ip, int port) throws IOException {
+    public synchronized void returnMoney(String ip, int port, int amount) throws IOException {
+    	if(!moneyBorrowed.containsKey(ip+":"+port)) {
+    		System.out.println("INVALID PORT NUMBER");
+    		return;
+    	}
     	Socket sc = new Socket(ip, port);
     	PrintWriter out = new PrintWriter(sc.getOutputStream(), true);
         Scanner in = new Scanner(sc.getInputStream());
         String ipWithPort = ip + ":" + port;
-        int moneyRet = moneyBorrowed.get(ipWithPort);
-        moneyBorrowed.remove(ipWithPort);
-        balance = balance - moneyRet;
-        out.println("RETURN " + this.ip + ":" + this.port + " " + moneyRet);
-        System.out.println("Returned " + moneyRet + " to " + ipWithPort);
+        if(moneyBorrowed.containsKey(ipWithPort)) {
+        	if(balance>amount && moneyBorrowed.get(ipWithPort)>=amount) {
+        		int moneyRet = moneyBorrowed.get(ipWithPort);
+        		moneyRet-=amount;
+        		if(moneyRet>0)
+        			moneyBorrowed.put(ipWithPort, moneyRet);
+        		else	
+        			moneyBorrowed.remove(ipWithPort);
+        		balance = balance - moneyRet;
+        		updateServer();
+        		out.println("RETURN " + this.ip + ":" + this.port + " " + moneyRet);
+        		System.out.println("Returned " + moneyRet + " to " + ipWithPort);
+        	}
+        	else
+        		System.out.println("INCORRECT VALUE ENTERED");
+        }
+        else
+        	System.out.println("No money borrowed from "+ipWithPort);
     }
     
     //acts as a server
     public synchronized Runnable receiveReturnedMoney(String clientIPAndPort, int moneyReturned, PrintWriter output) throws UnknownHostException, IOException {
-    	moneyLent.put(clientIPAndPort, moneyLent.get(clientIPAndPort) - moneyReturned);
-    	balance = balance + moneyReturned;
-    	output.println("MONEY RECEIVED FROM " + clientIPAndPort);
-    	System.out.println("Current balance is: " + balance);
-    	updateServer();
+    	if(moneyLent.containsKey(clientIPAndPort)) {
+    		moneyLent.put(clientIPAndPort, moneyLent.get(clientIPAndPort) - moneyReturned);
+    		balance = balance + moneyReturned;
+    		output.println("MONEY RECEIVED FROM " + clientIPAndPort);
+    		System.out.println("Current balance is: " + balance);
+    		updateServer();
+    	}
+    	else
+    		System.out.println("Illegal Action by "+clientIPAndPort);
 		return null;
     }
     

@@ -18,7 +18,11 @@ public class Simulator {
 	 * args[2]: port no
 	 * @param args
 	 */
-	public static void main(String[] args) throws NumberFormatException, IOException {
+	public static void main(String[] args) throws NumberFormatException, IOException {		
+		if(args.length!=3) {
+			System.out.println("Arguments entered less than 3...Exiting the Window");
+			System.exit(0);
+		}
 		Client client =  new Client(args[0], Integer.parseInt(args[1]), "127.0.0.1", Integer.parseInt(args[2]));
 		client.register();
 		
@@ -30,7 +34,7 @@ public class Simulator {
 			 * 2)return money
 			 * 3)close me!!
 			 */
-			System.out.println("Enter 1 to borrow, 2 to return");
+			System.out.println("Enter 1 to borrow, 2 to return, 3 deposit money, 4 withdraw money");
 			int option = sc.nextInt();
 			if(option==1) {
 				System.out.println("Enter amount to borrow: ");
@@ -39,12 +43,32 @@ public class Simulator {
 				client.requestMoney(ipsToConnect, moneyRequested);
 			}
 			else if(option==2) {
-				System.out.println("Enter port of client to return");
-				int port =  sc.nextInt();
-				client.returnMoney("127.0.0.1", port);
+				System.out.println(client.getMoneyBorrowedList());
+				if(client.getMoneyBorrowedList().isEmpty()) {
+		    		System.out.println("ILLEGAL OPERATION");	
+		    	}
+				else {
+					System.out.println("Enter port of client to return");
+					int port =  sc.nextInt();
+					System.out.println("Enter amount to return");
+					int amount =  sc.nextInt();
+					client.returnMoney("127.0.0.1", port, amount);
+				}
 			}
-			else 
+			else if(option==3) {
+				System.out.println("Enter amount to deposit");
+				int money = sc.nextInt();
+				client.depositMoney(money);
+			}
+			else if(option==4) {
+				System.out.println("Enter amount to withdraw");
+				int money = sc.nextInt();
+				client.withdrawMoney(money);
+			}
+			else {
+				client.leaveNetwork();
 				break;
+			}
 		
 		}
 		sc.close();

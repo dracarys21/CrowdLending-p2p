@@ -57,8 +57,12 @@ public class Server {
 		String[] arr = splitInputString(input);
 		String ipAndPort = arr[1];
 		int balance = Integer.parseInt(arr[2]);
-		directory.put(ipAndPort, balance);
-		out.println("AWK REGISTERED " + ipAndPort);
+		if(!directory.containsKey(ipAndPort)) {
+			directory.put(ipAndPort, balance);
+			out.println("AWK REGISTERED " + ipAndPort);
+		}
+		else
+			out.println("AWK NOT REGISTERD");
 	}
 	
 	private static void updateBalance(String input, PrintWriter out) {
@@ -69,6 +73,16 @@ public class Server {
 		out.println("AWK UPDATED " + ipAndPort + " " + updatedBalance);
 	}
 
+	public static void removePeer(String line, PrintWriter out) {
+		String[] arr = splitInputString(line);
+		String ipAndPort = arr[1];
+		if(directory.containsKey(ipAndPort)) {
+			directory.remove(ipAndPort);
+			out.println("AWK PEER "+ipAndPort+" REMOVED");
+		}
+		else
+			out.println("AWK PEER "+ipAndPort+" NOT PRESENT IN NETWORK");
+	}
     private static class Lender implements Runnable {
         private Socket socket;
 
@@ -94,6 +108,9 @@ public class Server {
                 else if(line.contains("UPDATE")) {
                 	Server.updateBalance(line, out);
                 }
+                else if(line.contains("LEAVE")) {
+                	Server.removePeer(line,out);
+                }
                 in.close();
             }
             catch (Exception e) {
@@ -101,4 +118,5 @@ public class Server {
             }
         }
     }
+
 }
